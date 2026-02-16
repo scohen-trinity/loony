@@ -4,18 +4,18 @@ use bevy::prelude::*;
 
 /// Struct for the player boat object
 #[derive(Component)]
-pub struct PlayerBoat;
+struct PlayerBoat;
 
 /// Struct for the velocity of the boat
 #[derive(Component)]
-pub struct Velocity3D {
+struct Velocity3D {
     pub lin: Vec3,    // forward speed
     pub ang_yaw: f32, // y
 }
 
 /// Struct for the controls of the boat
 #[derive(Component)]
-pub struct BoatControl {
+struct BoatControl {
     pub max_speed: f32,
     pub acceleration: f32,
     pub turn_speed: f32,
@@ -24,14 +24,14 @@ pub struct BoatControl {
 
 /// Struct for the current state of the boat
 #[derive(Component)]
-pub struct BoatState {
+struct BoatState {
     pub current_speed: f32,
     pub target_speed: f32,
     pub is_rowing: bool,
 }
 
 /// Method for spawning the boat
-pub fn spawn_player_boat(
+fn spawn_player_boat(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -72,13 +72,28 @@ fn boat_input_system(
     mut query: Query<(&PlayerBoat, &mut BoatState)>,
 ) {
     for (_, mut state) in &mut query {
-        // TODO - read input, tweak target_speed and is_rowing
+        state.is_rowing = false;
+        state.target_speed = 0.0;
+
+        let mut target: f32 = 0.0;
+
+        if keyboard.pressed(KeyCode::KeyW) {
+            target += 1.0;
+            state.is_rowing = true;
+        }
+
+        if keyboard.pressed(KeyCode::KeyS) {
+            target -= 1.0;
+            state.is_rowing = true;
+        }
+
+        state.target_speed = target * 1.0;
     }
 }
 
 /// Method responsible for moving the boat on the screen
 fn boat_movement_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
     mut query: Query<(
         &PlayerBoat,
         &mut Transform,
@@ -88,7 +103,29 @@ fn boat_movement_system(
     )>,
 ) {
     for (_, mut transform, mut vel, control, mut state) in &mut query {
-        // TODO - Use the BoatState + BoatControl to update the velocity and transform
+        let dt: f32 = time.delta_secs();
+
+        let desired_speed: f32 = state.target_speed * control.max_speed;
+
+        let speed_diff: f32 = desired_speed - state.current_speed;
+
+        if state.is_rowing {
+            let max_delta: f32 = control.acceleration * dt;
+            let delta: f32 = speed_diff.clamp(-max_delta, max_delta);
+            state.current_speed += delta;
+        } else {
+            let drag_factor: f32 = (1.0 - control.drag * dt).max(0.0);
+            state.current_speed *= drag_factor;
+        }
+
+        state.current_speed = state
+            .current_speed
+            .clamp(-control.max_speed, control.max_speed);
+
+        let forward: Dir3 = transform.forward();
+        vel.lin = forward * state.current_speed;
+
+        transform.translation += vel.lin * dt;
     }
 }
 
@@ -97,5 +134,6 @@ pub struct PlayerBoatPlugin;
 impl Plugin for PlayerBoatPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, spawn_player_boat);
+        app.add_systems(Update, (boat_input_system, boat_movement_system));
     }
 }
