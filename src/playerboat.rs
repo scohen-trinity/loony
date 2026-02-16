@@ -37,8 +37,8 @@ pub fn spawn_player_boat(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // TODO - upgrade this to something besides a square
-    let boat_mesh = meshes.add(Cuboid::new(2.0, 0.5, 4.0).mesh().build());
-    let boat_material = materials.add(StandardMaterial {
+    let boat_mesh: Handle<Mesh> = meshes.add(Cuboid::new(2.0, 0.5, 4.0).mesh().build());
+    let boat_material: Handle<StandardMaterial> = materials.add(StandardMaterial {
         base_color: Color::srgb(0.6, 0.4, 0.2),
         ..Default::default()
     });
