@@ -69,9 +69,9 @@ fn spawn_player_boat(
 /// Method responsible for handling the boat's input system
 fn boat_input_system(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&PlayerBoat, &mut BoatState)>,
+    mut query: Query<(&PlayerBoat, &mut BoatState, &mut Velocity3D)>,
 ) {
-    for (_, mut state) in &mut query {
+    for (_, mut state, mut vel) in &mut query {
         state.is_rowing = false;
         state.target_speed = 0.0;
 
@@ -86,6 +86,18 @@ fn boat_input_system(
             target -= 1.0;
             state.is_rowing = true;
         }
+
+        let mut yaw_input: f32 = 0.0;
+
+        if keyboard.pressed(KeyCode::KeyA) {
+            yaw_input -= 1.0;
+        }
+
+        if keyboard.pressed(KeyCode::KeyD) {
+            yaw_input += 1.0;
+        }
+
+        vel.ang_yaw = yaw_input;
 
         state.target_speed = target * 1.0;
     }
@@ -105,26 +117,37 @@ fn boat_movement_system(
     for (_, mut transform, mut vel, control, mut state) in &mut query {
         let dt: f32 = time.delta_secs();
 
-        let desired_speed: f32 = state.target_speed * control.max_speed;
+        // Apply yaw
+        let yaw_speed: f32 = vel.ang_yaw * control.turn_speed;
+        let delta_yaw: f32 = yaw_speed * dt;
 
+        transform.rotate_y(delta_yaw);
+
+        // Interpret the target speed as a fraction of max_speed
+        let desired_speed: f32 = state.target_speed * control.max_speed;
         let speed_diff: f32 = desired_speed - state.current_speed;
 
         if state.is_rowing {
+            // Accelerate towards the desired speed
             let max_delta: f32 = control.acceleration * dt;
             let delta: f32 = speed_diff.clamp(-max_delta, max_delta);
             state.current_speed += delta;
         } else {
+            // Apply drag to smoothly reduce speed when not rowing
             let drag_factor: f32 = (1.0 - control.drag * dt).max(0.0);
             state.current_speed *= drag_factor;
         }
 
+        // Clamp the actual speed to ensure that it does not exceed max_speed
         state.current_speed = state
             .current_speed
             .clamp(-control.max_speed, control.max_speed);
 
+        // Convert current_speed into a velocity vector
         let forward: Dir3 = transform.forward();
         vel.lin = forward * state.current_speed;
 
+        // Integrate velocity into position
         transform.translation += vel.lin * dt;
     }
 }
